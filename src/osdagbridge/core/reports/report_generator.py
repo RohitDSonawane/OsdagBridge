@@ -115,7 +115,19 @@ from osdagbridge.core.utils.common import (
     KEY_TL_HIGHEST_MAX_TEMP,
     KEY_TL_LOWEST_MIN_TEMP,
     KEY_TL_TEMP_FALL,
-    KEY_TL_TEMP_RISE
+    KEY_TL_TEMP_RISE,
+    KEY_UTIL_FLEXURE,
+    KEY_UTIL_SHEAR,
+    KEY_UTIL_LTB,
+    KEY_UTIL_INTERACTION,
+    KEY_DD_M_ULS_SAG,
+    KEY_DD_MU_BOT,
+    KEY_DD_M_ULS_HOG,
+    KEY_DD_MU_TOP,
+    KEY_DD_PUNCH_VED,
+    KEY_DD_VRD_C_MPA,
+    KEY_DD_SHEAR_VED,
+    KEY_DD_SHEAR_VRDC
 )
 
 from osdagbridge.core.reports.report_utils import _tex
@@ -892,6 +904,100 @@ def generate_report(payload, request):
             bridge = ReportDataBridge(payload.output_dict, payload.inputs, payload)
             span_m = float(payload.inputs.get(KEY_SPAN, 0) or 0)
 
+            # ── Generate Summary & Quantity Charts (Plan 04) ──
+            ur_chart_path = None
+            steel_chart_path = None
+            concrete_chart_path = None
+
+            try:
+                from osdagbridge.core.reports.report_charts import (
+                    generate_ur_chart,
+                    generate_steel_tonnage_chart,
+                    generate_concrete_rebar_chart
+                )
+                from osdagbridge.core.reports.report_utils import _max_member_efficiency
+
+                # 1. Collect UR Data for all major components
+                ur_dict = {}
+                def _parse_ur(val):
+                    try:
+                        if val is not None and str(val).strip() not in ("", "N.A.", "None"):
+                            f = float(val)
+                            return (f / 100.0) if f > 2.0 else f
+                    except (ValueError, TypeError):
+                        pass
+                    return None
+
+                # Girder checks
+                flx_ur = _parse_ur(bridge.output_dict.get(KEY_UTIL_FLEXURE))
+                if flx_ur is not None:
+                    ur_dict["Girder — Flexure"] = flx_ur
+
+                shr_ur = _parse_ur(bridge.output_dict.get(KEY_UTIL_SHEAR))
+                if shr_ur is not None:
+                    ur_dict["Girder — Shear"] = shr_ur
+
+                ltb_ur = _parse_ur(bridge.output_dict.get(KEY_UTIL_LTB))
+                if ltb_ur is not None:
+                    ur_dict["Girder — LTB"] = ltb_ur
+
+                int_ur = _parse_ur(bridge.output_dict.get(KEY_UTIL_INTERACTION))
+                if int_ur is not None:
+                    ur_dict["Girder — Interaction"] = int_ur
+
+                # Deck checks
+                deck_rpt = bridge.output_dict.get("deck_report_values", {})
+                try:
+                    ms = deck_rpt.get(KEY_DD_M_ULS_SAG)
+                    mu_b = deck_rpt.get(KEY_DD_MU_BOT)
+                    if ms and mu_b and float(mu_b) > 0:
+                        ur_dict["Deck — Sagging Flexure"] = float(ms) / float(mu_b)
+                except Exception:
+                    pass
+
+                try:
+                    mh = deck_rpt.get(KEY_DD_M_ULS_HOG)
+                    mu_t = deck_rpt.get(KEY_DD_MU_TOP)
+                    if mh and mu_t and float(mu_t) > 0:
+                        ur_dict["Deck — Hogging Flexure"] = float(mh) / float(mu_t)
+                except Exception:
+                    pass
+
+                try:
+                    p_ved = deck_rpt.get(KEY_DD_PUNCH_VED)
+                    p_vrd = deck_rpt.get(KEY_DD_VRD_C_MPA)
+                    if p_ved and p_vrd and float(p_vrd) > 0:
+                        ur_dict["Deck — Punching Shear"] = float(p_ved) / float(p_vrd)
+                except Exception:
+                    pass
+
+                try:
+                    s_ved = deck_rpt.get(KEY_DD_SHEAR_VED)
+                    s_vrd = deck_rpt.get(KEY_DD_SHEAR_VRDC)
+                    if s_ved and s_vrd and float(s_vrd) > 0:
+                        ur_dict["Deck — Beam Shear"] = float(s_ved) / float(s_vrd)
+                except Exception:
+                    pass
+
+                # Cross bracing & End diaphragm
+                cb_eff = _max_member_efficiency(bridge.output_dict.get("crossbracing_design_results", {}))
+                if cb_eff is not None:
+                    ur_dict["Cross Bracing (Governing)"] = cb_eff
+
+                ed_eff = _max_member_efficiency(bridge.output_dict.get("end_diaphragm_design_results", {}))
+                if ed_eff is not None:
+                    ur_dict["End Diaphragm (Governing)"] = ed_eff
+
+                # Generate charts into tmp_assets
+                if ur_dict:
+                    ur_chart_path = generate_ur_chart(ur_dict, tmp_assets)
+
+                steel_chart_path = generate_steel_tonnage_chart(payload.inputs, tmp_assets)
+                concrete_chart_path = generate_concrete_rebar_chart(payload.inputs, tmp_assets)
+
+            except Exception as chart_err:
+                logger.warning("Chart generation encountered an error: %s", chart_err)
+
             doc_parts = []
             doc_parts.append(preamble(payload.metadata.project_name, payload.metadata.job_number, payload.metadata.report_date, payload.metadata.subtitle or 'Rev 0'))
             doc_parts.append(title_page(payload.metadata, osdag_logo_latex, org_logo_latex))
@@ -913,11 +1019,11 @@ def generate_report(payload, request):
             if 'analysis' in secs:
                 doc_parts.append(ch4_analysis(payload.analysis_summary, fig_paths, bridge, span_m))
             if 'design_checks' in secs:
-                doc_parts.append(ch5_design_checks(payload.design_checks, bridge))
+                doc_parts.append(ch5_design_checks(payload.design_checks, bridge, ur_chart_path=ur_chart_path))
             if 'drawings' in secs and payload.options.include_figures:
                 doc_parts.append(ch6_drawings(fig_paths))
 
-            doc_parts.append(ch7_quantities(payload.inputs))
+            doc_parts.append(ch7_quantities(payload.inputs, steel_chart_path=steel_chart_path, concrete_chart_path=concrete_chart_path))
 
             mode = str(payload.inputs.get(KEY_DESIGN_MODE, "Optimized")).strip().lower()
             is_custom = mode in {"custom", "customized"}

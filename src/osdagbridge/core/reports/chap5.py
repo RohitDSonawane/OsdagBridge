@@ -141,11 +141,11 @@ from osdagbridge.core.utils.common import (
     KEY_UTIL_SHEAR
 )
 
-from osdagbridge.core.reports.report_utils import _tex, _render_value, get_girder_entries
+from osdagbridge.core.reports.report_utils import _tex, _render_value, get_girder_entries, _fig_embed
 
 if TYPE_CHECKING:
     pass
-def ch5_design_checks(checks_data, bridge) -> str:
+def ch5_design_checks(checks_data, bridge, ur_chart_path=None) -> str:
     """Chapter 5 — Design Checks.
 
     Parameters
@@ -1080,6 +1080,14 @@ Fatigue Shear Resistance, $Q_r$ & IRC 22 Table 8 ($\phi d$, $N_{sc}$) & """
     ]
     t522_content = "\n".join(_t522)
 
+    ur_chart_tex = ""
+    if ur_chart_path:
+        ur_chart_tex = (
+            "\n\\vspace{0.5em}\n\\noindent\n"
+            + _fig_embed(ur_chart_path, "Figure 5.1 — Utilization Ratio Summary — All Structural Components", width=r"0.9\textwidth")
+            + "\n\\vspace{1em}\n"
+        )
+
     return r"""
 \chapter{Design Checks}
 
@@ -1934,7 +1942,7 @@ End diaphragms at the supports transfer transverse loads to the bearings, restra
 \section{Overall Design Check Summary}
 \label{sec:overall-summary}
 % ===========================
-
+""" + ur_chart_tex + r"""
 \vspace{1em}
 \begin{longtable}{|C{3.4cm}|L{4.5cm}|C{2.3cm}|C{2.3cm}|>{\centering\arraybackslash}p{1.6cm}|}
 \caption{\textbf{Overall Design Check Summary --- All Members}} \label{subsec:overall-design-summary} \\

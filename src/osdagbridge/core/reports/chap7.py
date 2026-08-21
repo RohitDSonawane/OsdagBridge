@@ -1,4 +1,20 @@
-def ch7_quantities(input_dict):
+from osdagbridge.core.reports.report_utils import _fig_embed
+
+def ch7_quantities(input_dict, steel_chart_path=None, concrete_chart_path=None):
+    charts_tex = ""
+    if steel_chart_path:
+        charts_tex += (
+            "\n\\vspace{1em}\n\\noindent\n"
+            + _fig_embed(steel_chart_path, "Figure 7.1 — Structural Steel Tonnage by Member Type (MT)", width=r"0.85\textwidth")
+            + "\n"
+        )
+    if concrete_chart_path:
+        charts_tex += (
+            "\n\\vspace{1em}\n\\noindent\n"
+            + _fig_embed(concrete_chart_path, "Figure 7.2 — Deck Slab: Concrete Volume (m³) vs. Reinforcement Steel Weight (MT)", width=r"0.85\textwidth")
+            + "\n"
+        )
+
     return r"""
 \chapter{Material Take-off \& Quantity Summary}
 \label{ch:material-takeoff}
@@ -43,6 +59,6 @@ def ch7_quantities(input_dict):
 \hline
 \end{longtable}
 \endgroup
-"""
+""" + charts_tex
 
 

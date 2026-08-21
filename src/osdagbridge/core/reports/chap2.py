@@ -383,6 +383,7 @@ def _bracing_tables(input_dict, n_girders):
     return (r"""
 \newpage
 
+\begingroup
 \vspace{0.4em}
 \setlength{\tabcolsep}{4pt}
 \setlength\LTleft{0pt}
@@ -396,7 +397,9 @@ def _bracing_tables(input_dict, n_girders):
 """
 + cb_rows
 + r"""\end{longtable}
+\endgroup
 
+\begingroup
 \vspace{0.4em}
 \noindent
 \setlength{\tabcolsep}{4pt}
@@ -411,6 +414,7 @@ def _bracing_tables(input_dict, n_girders):
 """
 + ed_rows
 + r"""\end{longtable}
+\endgroup
 """)
 
 

@@ -1406,6 +1406,7 @@ Cross bracing between adjacent plate girders provides lateral stability during c
 
 \vspace{1em}
 
+\begingroup
 \vspace{0.4em}
 \noindent
 \setlength{\tabcolsep}{4pt}
@@ -1419,6 +1420,7 @@ Cross bracing between adjacent plate girders provides lateral stability during c
 \hline
 """ + cb_forces_content + r"""
 \end{longtable}
+\endgroup
 \noindent\textit{Note: $A_g$ = gross cross-sectional area; $r_{min}$ = minimum radius of gyration.}
 
 \vspace{1em}
@@ -1450,6 +1452,7 @@ End diaphragms at the supports transfer transverse loads to the bearings, restra
 
 \vspace{1em}
 
+\begingroup
 \vspace{0.4em}
 \noindent
 \setlength{\tabcolsep}{4pt}
@@ -1463,6 +1466,7 @@ End diaphragms at the supports transfer transverse loads to the bearings, restra
 \hline
 """ + cb_forces_content + r"""
 \end{longtable}
+\endgroup
 \noindent\textit{Note: $A_g$ = gross cross-sectional area; $r_{min}$ = minimum radius of gyration.}
 
 \vspace{1em}
@@ -1486,6 +1490,7 @@ End diaphragms at the supports transfer transverse loads to the bearings, restra
 \end{longtable}
 \noindent\textit{Note: Designed per IS 800 Cl. 7 (compression) and Cl. 6 (tension). OsdagBridge cross-bracing module used.}
 
+\clearpage
 % ===========================
 \section{Overall Design Check Summary}
 \label{sec:overall-summary}

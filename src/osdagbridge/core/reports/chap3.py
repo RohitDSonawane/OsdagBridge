@@ -5,6 +5,7 @@
 
 from osdagbridge.core.utils.common import (
     KEY_CB_LOAD,
+    KEY_FOOTPATH,
     KEY_LL_CUSTOM_VEHICLES,
     KEY_LL_FOOTPATH_PRESSURE_MODE,
     KEY_LL_FOOTPATH_PRESSURE_VALUE,
@@ -56,91 +57,105 @@ from osdagbridge.core.utils.common import (
 from osdagbridge.core.reports.report_utils import _tex, _render_value
 
 def ch3_loads(input_dict):
-    # Live load vehicle names mapping
-    vehicles = []
-    if input_dict.get(KEY_LL_IRC_CLASS_A):
-        vehicles.append("Class A")
-    if input_dict.get(KEY_LL_IRC_70R_WHEELED):
-        vehicles.append("Class 70R (Wheeled)")
-    if input_dict.get(KEY_LL_IRC_70R_TRACKED):
-        vehicles.append("Class 70R (Tracked)")
-    if input_dict.get(KEY_LL_IRC_AA_WHEELED):
-        vehicles.append("Class AA (Wheeled)")
-    if input_dict.get(KEY_LL_IRC_AA_TRACKED):
-        vehicles.append("Class AA (Tracked)")
-    if input_dict.get(KEY_LL_IRC_CLASS_SV):
-        vehicles.append("Class SV")
-    if input_dict.get(KEY_LL_IRC_70R_BOGIE):
-        vehicles.append("Class 70R (Bogie)")
-    if input_dict.get(KEY_LL_IRC_CLASS_FATIGUE):
-        vehicles.append("Class Fatigue")
-    
-    custom = input_dict.get(KEY_LL_CUSTOM_VEHICLES)
-    if custom and isinstance(custom, list):
-        for c in custom:
-            if isinstance(c, dict) and c.get('name'):
-                vehicles.append(c['name'])
-            elif isinstance(c, str):
-                vehicles.append(c)
-                
-    vehicles_str = ", ".join(vehicles) if vehicles else "None"
-
     from osdagbridge.core.utils.codes.irc6_2017 import IRC6_2017
+
     span = input_dict.get(KEY_SPAN)
-    impact_factor_str = ""
+    span_m = None
     if span not in (None, ""):
         try:
             span_m = float(span)
-            factors = []
-            if input_dict.get(KEY_LL_IRC_CLASS_A):
-                im_a = IRC6_2017.cl_208_2_impact_factor(span_m)
-                factors.append(f"Class A: {1.0 + im_a:.3f}")
-            is_wheeled_heavy = (
-                input_dict.get(KEY_LL_IRC_70R_WHEELED) or 
-                input_dict.get(KEY_LL_IRC_AA_WHEELED) or 
-                input_dict.get(KEY_LL_IRC_70R_BOGIE)
-            )
-            is_tracked_heavy = (
-                input_dict.get(KEY_LL_IRC_70R_TRACKED) or 
-                input_dict.get(KEY_LL_IRC_AA_TRACKED)
-            )
-            if is_wheeled_heavy or is_tracked_heavy:
-                im_aa = IRC6_2017.cl_208_3_impact_factor(span_m)
-                factors.append(f"Class AA/70R: {1.0 + im_aa:.3f}")
-            
-            if factors:
-                impact_factor_str = ", ".join(factors)
-            else:
-                impact_factor_str = "N/A"
         except Exception:
-            impact_factor_str = "N/A"
-    else:
-        impact_factor_str = "N/A"
+            span_m = None
 
     lanes = input_dict.get(KEY_WC_LD_LANE_TABLE_COUNT)
-    braking_force_str = ""
+    braking_force_val_str = "---"
     if lanes not in (None, ""):
         try:
             lanes_int = int(lanes)
             braking_force_t = IRC6_2017.cl_211_2_braking_force(lanes_int)
             braking_force_kN = braking_force_t * 9.81
-            braking_force_str = f"{braking_force_kN:.2f} kN ({braking_force_t:.2f} tonnes)"
+            braking_force_val_str = f"{braking_force_kN:.2f} kN"
         except Exception:
-            braking_force_str = "N/A"
-    else:
-        braking_force_str = "N/A"
+            braking_force_val_str = "N/A"
 
+    # Per-vehicle records for Table 3.3(a)
+    vehicle_rows = []
+    def _add_vrow(name, if_clause_fn, has_braking=True, custom_if=None, custom_ecc=None):
+        if custom_if is not None:
+            if_str = custom_if
+        elif if_clause_fn and span_m is not None:
+            try:
+                inc = if_clause_fn(span_m)
+                if_str = f"{1.0 + inc:.3f}"
+            except Exception:
+                if_str = "N/A"
+        else:
+            if_str = "---"
+
+        if has_braking:
+            brk_cons = "Yes"
+            brk_val = braking_force_val_str
+            brk_ecc = custom_ecc if custom_ecc else r"At road surface level (IRC:6 Cl. 211.4)"
+        else:
+            brk_cons = "No"
+            brk_val = "---"
+            brk_ecc = "---"
+
+        return f"{name} & {if_str} & {brk_cons} & {brk_val} & {brk_ecc}" + r" \\[6pt]" + "\n" + r"\hline"
+
+    if input_dict.get(KEY_LL_IRC_CLASS_A):
+        vehicle_rows.append(_add_vrow("Class A", IRC6_2017.cl_208_2_impact_factor, True))
+    if input_dict.get(KEY_LL_IRC_70R_WHEELED):
+        vehicle_rows.append(_add_vrow("Class 70R (Wheeled)", IRC6_2017.cl_208_3_impact_factor, True))
+    if input_dict.get(KEY_LL_IRC_70R_TRACKED):
+        vehicle_rows.append(_add_vrow("Class 70R (Tracked)", IRC6_2017.cl_208_3_impact_factor, True))
+    if input_dict.get(KEY_LL_IRC_70R_BOGIE):
+        vehicle_rows.append(_add_vrow("Class 70R (Bogie)", IRC6_2017.cl_208_3_impact_factor, True))
+    if input_dict.get(KEY_LL_IRC_AA_WHEELED):
+        vehicle_rows.append(_add_vrow("Class AA (Wheeled)", IRC6_2017.cl_208_3_impact_factor, True))
+    if input_dict.get(KEY_LL_IRC_AA_TRACKED):
+        vehicle_rows.append(_add_vrow("Class AA (Tracked)", IRC6_2017.cl_208_3_impact_factor, True))
+    if input_dict.get(KEY_LL_IRC_CLASS_SV):
+        vehicle_rows.append(_add_vrow("Class SV", None, False, custom_if="---"))
+    if input_dict.get(KEY_LL_IRC_CLASS_FATIGUE):
+        vehicle_rows.append(_add_vrow("Class Fatigue", IRC6_2017.cl_208_2_impact_factor, True))
+    
+    custom = input_dict.get(KEY_LL_CUSTOM_VEHICLES)
+    if custom and isinstance(custom, list):
+        for c in custom:
+            cname = c.get('name') if isinstance(c, dict) else str(c)
+            if cname:
+                vehicle_rows.append(_add_vrow(_tex(cname), None, False, custom_if="N/A", custom_ecc="User-defined"))
+
+    if not vehicle_rows:
+        vehicle_rows.append(r"None Selected & --- & --- & --- & --- \\[6pt]" + "\n" + r"\hline")
+
+    vehicle_rows_str = "\n".join(vehicle_rows)
+
+    # Footpath / Footway loading (Table 3.3b)
+    has_fp = str(input_dict.get(KEY_FOOTPATH, "")).strip().lower() not in ("", "none", "false", "0")
     fp_mode  = input_dict.get(KEY_LL_FOOTPATH_PRESSURE_MODE, "")
     fp_value = input_dict.get(KEY_LL_FOOTPATH_PRESSURE_VALUE, "")
-    if str(fp_mode).strip().lower() in ("as per irc 6", "as per irc6", "automatic"):
-        try:
-            fp_str = f"{IRC6_2017.cl_206_1_footway_load():.3f} kN/m² (IRC 6 Cl. 206.1)"
-        except Exception:
+
+    if has_fp:
+        has_fp_str = f"Yes ({input_dict.get(KEY_FOOTPATH)})"
+        if str(fp_mode).strip().lower() in ("as per irc 6", "as per irc6", "automatic"):
+            try:
+                fp_str = f"{IRC6_2017.cl_206_1_footway_load():.3f} kN/m²"
+                fp_mode_str = "As Per IRC 6 (Automatic)"
+            except Exception:
+                fp_str = "N/A"
+                fp_mode_str = "As Per IRC 6"
+        elif fp_value not in (None, ""):
+            fp_str = f"{fp_value} kN/m²"
+            fp_mode_str = "Custom (User-defined)"
+        else:
             fp_str = "N/A"
-    elif fp_value not in (None, ""):
-        fp_str = f"{fp_value} kN/m²"
+            fp_mode_str = "User-defined"
     else:
-        fp_str = "N/A"
+        has_fp_str = "No (Footway loading not applicable)"
+        fp_mode_str = "---"
+        fp_str = "---"
 
     # Vz / Pz — prefer stored computed values; fall back to IRC6 Table 12
     vz_val = input_dict.get(KEY_WL_HOURLY_MEAN_WIND)
@@ -330,8 +345,33 @@ This section summarizes all loads applied to the bridge and the load combination
 \end{longtable}
 
 \vspace{1em}
+\begin{longtable}{|L{2.8cm}|C{2.0cm}|C{2.0cm}|C{2.4cm}|L{4.2cm}|}
+\caption{\textbf{Live Loads (LL) --- Vehicle Summary (IRC:6-2017)}} \label{subsec:live-loads-vehicles} \\
+\hline
+\textbf{Vehicle Class} & \textbf{Impact Factor} & \makecell{\textbf{Braking}\\\textbf{Considered?}} & \textbf{Braking Force} & \textbf{Braking Eccentricity} \\[6pt]
+\hline
+\endfirsthead
+
+\hline
+\multicolumn{5}{|c|}{{\small\itshape \tablename\ \thetable{} -- Continued from previous page}} \\
+\hline
+\textbf{Vehicle Class} & \textbf{Impact Factor} & \makecell{\textbf{Braking}\\\textbf{Considered?}} & \textbf{Braking Force} & \textbf{Braking Eccentricity} \\[6pt]
+\hline
+\endhead
+
+\hline
+\multicolumn{5}{|r|}{{\small\itshape Continued on next page\ldots}} \\
+\endfoot
+
+\hline
+\endlastfoot
+""" + vehicle_rows_str + r"""
+\end{longtable}
+\noindent\textit{Note: Impact factor computed per IRC:6-2017 Cl. 208.2 (Class A / Fatigue) and Cl. 208.3 (Class 70R / AA). Longitudinal braking force per IRC:6-2017 Cl. 211.2 acting at road surface level per Cl. 211.4.}
+
+\vspace{1em}
 \begin{longtable}{|L{5.5cm}|p{10.0cm}|}
-\caption{\textbf{Live Loads (LL)}} \label{subsec:live-loads} \\
+\caption{\textbf{Footway Live Load (IRC:6 Cl. 206.1)}} \label{subsec:footway-load} \\
 \hline
 \textbf{parameter} & \textbf{value} \\[6pt]
 \hline
@@ -350,13 +390,13 @@ This section summarizes all loads applied to the bridge and the load combination
 
 \hline
 \endlastfoot
-\textnormal{Vehicles Considered} & """ + _tex(vehicles_str) + r""" \\[6pt]
+\textnormal{Footway / Pedestrian Load Present} & """ + _tex(has_fp_str) + r""" \\[6pt]
 \hline
-\textnormal{Impact Factor (IRC 6)} & """ + _tex(impact_factor_str) + r""" \\[6pt]
+\textnormal{Pressure Mode} & """ + _tex(fp_mode_str) + r""" \\[6pt]
 \hline
-\textnormal{Braking Load (IRC 6)} & """ + _tex(braking_force_str) + r""" \\[6pt]
+\textnormal{Intensity} & """ + _tex(fp_str) + r""" \\[6pt]
 \hline
-\textnormal{Footpath Live Load (if applicable)} & """ + (_render_value(input_dict, KEY_LL_FOOTPATH_PRESSURE_VALUE, ' kN/m\\textsuperscript{2}')) + r""" \\[6pt]
+\textnormal{IRC 6 Clause Reference} & IRC 6:2017 Cl. 206.1 \\[6pt]
 \hline
 \end{longtable}
 

@@ -113,3 +113,55 @@ def _fig_embed(path, caption, width=r'\textwidth', height=None):
             r'}}')
 
 
+def build_longtable_header(col_spec, col_headers, caption, n_cols, label=None):
+    """Build standardized longtable header with \\endfirsthead, \\endhead, \\endfoot, \\endlastfoot."""
+    header_row = " & ".join(col_headers) + r" \\[6pt]"
+    label_str = f"\\label{{{label}}}" if label else ""
+    return (
+        f"\\begin{{longtable}}{{{col_spec}}}\n"
+        f"\\caption{{{caption}}} {label_str} \\\\\n"
+        f"\\hline\n"
+        f"{header_row}\n"
+        f"\\hline\n"
+        f"\\endfirsthead\n\n"
+        f"\\hline\n"
+        f"\\multicolumn{{{n_cols}}}{{|c|}}{{\\small\\itshape \\tablename\\ \\thetable{{}} -- Continued from previous page}} \\\\\n"
+        f"\\hline\n"
+        f"{header_row}\n"
+        f"\\hline\n"
+        f"\\endhead\n\n"
+        f"\\hline\n"
+        f"\\multicolumn{{{n_cols}}}{{|r|}}{{\\small\\itshape Continued on next page\\ldots}} \\\\\n"
+        f"\\endfoot\n\n"
+        f"\\hline\n"
+        f"\\endlastfoot\n"
+    )
+
+
+def _max_member_efficiency(pair_designs):
+    """Maximum Osdag 'efficiency' (utilization ratio) over a cross-bracing or
+    end-diaphragm result dump (nested pair -> member -> force_type -> raw).
+    Reads already-computed results only; nothing is recalculated here."""
+    from osdagbridge.core.bridge_types.plate_girder.results_data import _extract_osdag_summary
+    if not isinstance(pair_designs, dict):
+        return None
+    best = None
+    for members in pair_designs.values():
+        if not isinstance(members, dict):
+            continue
+        for force_types in members.values():
+            if not isinstance(force_types, dict):
+                continue
+            for raw in force_types.values():
+                try:
+                    val = _extract_osdag_summary(raw or {}).get("efficiency")
+                    if val is None:
+                        continue
+                    f = float(val)
+                except (TypeError, ValueError, AttributeError):
+                    continue
+                if best is None or f > best:
+                    best = f
+    return best
+
+

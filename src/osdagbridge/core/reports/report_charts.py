@@ -117,11 +117,30 @@ def generate_steel_tonnage_chart(quantities: dict, output_dir: str, filename: st
     if not quantities:
         return None
 
+    g_wt = quantities.get("steel_girders_wt_total")
+    cb_wt = quantities.get("steel_bracing_wt_total")
+    if cb_wt in (None, "", "N.A."):
+        cb_parts = [
+            quantities.get("bracing_top_wt_total"),
+            quantities.get("bracing_bot_wt_total"),
+            quantities.get("bracing_diag_wt_total"),
+        ]
+        cb_nums = []
+        for p in cb_parts:
+            try:
+                if p not in (None, "", "N.A."):
+                    cb_nums.append(float(p))
+            except (ValueError, TypeError):
+                pass
+        if cb_nums:
+            cb_wt = sum(cb_nums)
+
+    ed_wt = quantities.get("end_diaphragm_wt_total", quantities.get("steel_diaphragm_wt_total", 0.0))
+
     raw_items = [
-        ("Girders", quantities.get("steel_girders_wt_total")),
-        ("CB Top Chord", quantities.get("bracing_top_wt_total")),
-        ("CB Bottom Chord", quantities.get("bracing_bot_wt_total")),
-        ("CB Diagonal", quantities.get("bracing_diag_wt_total")),
+        ("Girders", g_wt),
+        ("Cross Bracing", cb_wt),
+        ("End Diaphragms", ed_wt),
     ]
 
     labels = []

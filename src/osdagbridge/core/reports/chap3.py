@@ -80,7 +80,23 @@ def ch3_loads(input_dict):
 
     # Per-vehicle records for Table 3.3(a)
     vehicle_rows = []
-    def _add_vrow(name, if_clause_fn, has_braking=True, custom_if=None, custom_ecc=None):
+    def _total_load_from_vehicle(vehicle_fn):
+        if not vehicle_fn:
+            return "N/A"
+        try:
+            data = vehicle_fn()
+            if "total_load_kN" in data:
+                return f"{float(data['total_load_kN']):.2f}"
+            if "wheel_loads" in data:
+                return f"{sum(data['wheel_loads']) / 1000.0:.2f}"
+            if "wheel_loads_udl" in data and "x" in data and len(data["x"]) >= 2:
+                track_length = abs(float(data["x"][-1]) - float(data["x"][0]))
+                return f"{float(data['wheel_loads_udl']) * track_length * 2.0 / 1000.0:.2f}"
+        except Exception:
+            return "N/A"
+        return "N/A"
+
+    def _add_vrow(name, if_clause_fn, has_braking=True, custom_if=None, custom_ecc=None, vehicle_fn=None):
         if custom_if is not None:
             if_str = custom_if
         elif if_clause_fn and span_m is not None:
@@ -101,14 +117,15 @@ def ch3_loads(input_dict):
             brk_val = "---"
             brk_ecc = "---"
 
-        return f"{name} & {if_str} & {brk_cons} & {brk_val} & {brk_ecc}" + r" \\[6pt]" + "\n" + r"\hline"
+        total_load = _total_load_from_vehicle(vehicle_fn)
+        return f"{name} & {total_load} & {if_str} & {brk_cons} & {brk_val} & {brk_ecc}" + r" \\[6pt]" + "\n" + r"\hline"
 
     if input_dict.get(KEY_LL_IRC_CLASS_A):
-        vehicle_rows.append(_add_vrow("Class A", IRC6_2017.cl_208_2_impact_factor, True))
+        vehicle_rows.append(_add_vrow("Class A", IRC6_2017.cl_208_2_impact_factor, True, vehicle_fn=IRC6_2017.cl_204_1_ClassA_vehicle))
     if input_dict.get(KEY_LL_IRC_70R_WHEELED):
-        vehicle_rows.append(_add_vrow("Class 70R (Wheeled)", IRC6_2017.cl_208_3_impact_factor, True))
+        vehicle_rows.append(_add_vrow("Class 70R (Wheeled)", IRC6_2017.cl_208_3_impact_factor, True, vehicle_fn=IRC6_2017.cl_204_1_Class70R_vehicle_wheel))
     if input_dict.get(KEY_LL_IRC_70R_TRACKED):
-        vehicle_rows.append(_add_vrow("Class 70R (Tracked)", IRC6_2017.cl_208_3_impact_factor, True))
+        vehicle_rows.append(_add_vrow("Class 70R (Tracked)", IRC6_2017.cl_208_3_impact_factor, True, vehicle_fn=IRC6_2017.cl_204_1_Class70R_vehicle_track))
     if input_dict.get(KEY_LL_IRC_70R_BOGIE):
         vehicle_rows.append(_add_vrow("Class 70R (Bogie)", IRC6_2017.cl_208_3_impact_factor, True))
     if input_dict.get(KEY_LL_IRC_AA_WHEELED):
@@ -116,9 +133,9 @@ def ch3_loads(input_dict):
     if input_dict.get(KEY_LL_IRC_AA_TRACKED):
         vehicle_rows.append(_add_vrow("Class AA (Tracked)", IRC6_2017.cl_208_3_impact_factor, True))
     if input_dict.get(KEY_LL_IRC_CLASS_SV):
-        vehicle_rows.append(_add_vrow("Class SV", None, False, custom_if="---"))
+        vehicle_rows.append(_add_vrow("Class SV", None, False, custom_if="---", vehicle_fn=IRC6_2017.cl_204_5_1_special_vehicle))
     if input_dict.get(KEY_LL_IRC_CLASS_FATIGUE):
-        vehicle_rows.append(_add_vrow("Class Fatigue", IRC6_2017.cl_208_2_impact_factor, True))
+        vehicle_rows.append(_add_vrow("Class Fatigue", IRC6_2017.cl_208_2_impact_factor, True, vehicle_fn=IRC6_2017.cl_204_6_fatigue_load))
     
     custom = input_dict.get(KEY_LL_CUSTOM_VEHICLES)
     if custom and isinstance(custom, list):
@@ -128,7 +145,7 @@ def ch3_loads(input_dict):
                 vehicle_rows.append(_add_vrow(_tex(cname), None, False, custom_if="N/A", custom_ecc="User-defined"))
 
     if not vehicle_rows:
-        vehicle_rows.append(r"None Selected & --- & --- & --- & --- \\[6pt]" + "\n" + r"\hline")
+        vehicle_rows.append(r"None Selected & --- & --- & --- & --- & --- \\[6pt]" + "\n" + r"\hline")
 
     vehicle_rows_str = "\n".join(vehicle_rows)
 
@@ -344,23 +361,23 @@ This section summarizes all loads applied to the bridge and the load combination
 \hline
 \end{longtable}
 
-\vspace{1em}
-\begin{longtable}{|L{2.8cm}|C{2.0cm}|C{2.0cm}|C{2.4cm}|L{4.2cm}|}
+\clearpage
+\begin{longtable}{|L{2.5cm}|C{2.0cm}|C{1.8cm}|C{1.8cm}|C{2.2cm}|L{3.8cm}|}
 \caption{\textbf{Live Loads (LL) --- Vehicle Summary (IRC:6-2017)}} \label{subsec:live-loads-vehicles} \\
 \hline
-\textbf{Vehicle Class} & \textbf{Impact Factor} & \makecell{\textbf{Braking}\\\textbf{Considered?}} & \textbf{Braking Force} & \textbf{Braking Eccentricity} \\[6pt]
+\textbf{Vehicle Class} & \makecell{\textbf{Total Load}\\\textbf{(kN)}} & \textbf{Impact Factor} & \makecell{\textbf{Braking}\\\textbf{Considered?}} & \textbf{Braking Force} & \textbf{Braking Eccentricity} \\[6pt]
 \hline
 \endfirsthead
 
 \hline
-\multicolumn{5}{|c|}{{\small\itshape \tablename\ \thetable{} -- Continued from previous page}} \\
+\multicolumn{6}{|c|}{{\small\itshape \tablename\ \thetable{} -- Continued from previous page}} \\
 \hline
-\textbf{Vehicle Class} & \textbf{Impact Factor} & \makecell{\textbf{Braking}\\\textbf{Considered?}} & \textbf{Braking Force} & \textbf{Braking Eccentricity} \\[6pt]
+\textbf{Vehicle Class} & \makecell{\textbf{Total Load}\\\textbf{(kN)}} & \textbf{Impact Factor} & \makecell{\textbf{Braking}\\\textbf{Considered?}} & \textbf{Braking Force} & \textbf{Braking Eccentricity} \\[6pt]
 \hline
 \endhead
 
 \hline
-\multicolumn{5}{|r|}{{\small\itshape Continued on next page\ldots}} \\
+\multicolumn{6}{|r|}{{\small\itshape Continued on next page\ldots}} \\
 \endfoot
 
 \hline

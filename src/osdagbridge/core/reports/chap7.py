@@ -1,3 +1,4 @@
+from osdagbridge.core.reports import styles
 from osdagbridge.core.reports.report_utils import _fig_embed
 
 def ch7_quantities(input_dict, steel_chart_path=None, concrete_chart_path=None):
@@ -20,7 +21,7 @@ def ch7_quantities(input_dict, steel_chart_path=None, concrete_chart_path=None):
 \label{ch:material-takeoff}
 
 \begingroup
-\setlength{\tabcolsep}{3.5pt}
+\setlength{\tabcolsep}{""" + styles.latex_pt(styles.TABCOLSEP_NARROW_35) + r"""}
 \begin{longtable}{|C{1.0cm}|L{3.8cm}|C{2.6cm}|C{1.8cm}|C{1.8cm}|C{1.8cm}|C{1.8cm}|}
 \caption{\textbf{Bill of Materials (Steel, Concrete, and Reinforcement Quantities)}} \label{tab:bom} \\
 \hline

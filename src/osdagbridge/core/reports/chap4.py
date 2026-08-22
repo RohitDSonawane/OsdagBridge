@@ -5,6 +5,7 @@ from osdagbridge.core.utils.common import (
     KEY_SD_DEFL_LIVE,
     KEY_SD_DEFL_TOTAL,
 )
+from osdagbridge.core.reports import styles
 from osdagbridge.core.reports.report_utils import _tex, _fig_embed
 
 if TYPE_CHECKING:
@@ -83,8 +84,8 @@ A grillage model was used for structural analysis. The deck is idealized as a gr
 \vspace{1em}
 \begingroup
 \footnotesize
-\setlength{\tabcolsep}{3pt}
-\renewcommand{\arraystretch}{1.25}
+\setlength{\tabcolsep}{""" + styles.latex_pt(styles.TABCOLSEP_NARROW_3) + r"""}
+\renewcommand{\arraystretch}{""" + f"{styles.ARRAY_STRETCH_DENSE:.2f}" + r"""}
 
 \begin{longtable}{|
 >{\centering\arraybackslash}p{3.1cm}|

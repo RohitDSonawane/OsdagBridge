@@ -70,6 +70,7 @@ from osdagbridge.core.utils.common import (
     KEY_WC_THICKNESS
 )
 
+from osdagbridge.core.reports import styles
 from osdagbridge.core.reports.report_utils import _render_value, get_girder_entries, _tex
 
 def ch2_input_parameters(m, input_dict, output_dict=None):
@@ -457,7 +458,7 @@ def _bracing_tables(input_dict, n_girders):
 
 \begingroup
 \vspace{0.4em}
-\setlength{\tabcolsep}{4pt}
+\setlength{\tabcolsep}{""" + styles.latex_pt(styles.TABCOLSEP_NARROW_4) + r"""}
 \setlength\LTleft{0pt}
 \setlength\LTright{\fill}
 
@@ -489,7 +490,7 @@ def _bracing_tables(input_dict, n_girders):
 \begingroup
 \vspace{0.4em}
 \noindent
-\setlength{\tabcolsep}{4pt}
+\setlength{\tabcolsep}{""" + styles.latex_pt(styles.TABCOLSEP_NARROW_4) + r"""}
 \setlength\LTleft{0pt}
 \setlength\LTright{\fill}
 

@@ -141,6 +141,7 @@ from osdagbridge.core.utils.common import (
     KEY_UTIL_SHEAR
 )
 
+from osdagbridge.core.reports import styles
 from osdagbridge.core.reports.report_utils import _tex, _render_value, get_girder_entries, _fig_embed
 
 if TYPE_CHECKING:
@@ -334,20 +335,15 @@ def ch5_design_checks(checks_data, bridge, ur_chart_path=None) -> str:
     # Generate Table 5.7 rows
     t57_rows = []
     for lbl, _ in girder_entries:
-        t57_rows.append(
-            r"\multirow{6}{*}{\makecell{" + lbl + r"""}} & \textnormal{Shear Buckling Design Method} & """ + _render_value(bridge.output_dict, KEY_SD_STIFF_METHOD) + r""" \\[6pt]
-\cline{2-3}
- & \textnormal{Intermediate Stiffener Thickness (mm)} & """ + _render_value(bridge.output_dict, KEY_SD_STIFF_INT_THICK) + r""" \\[6pt]
-\cline{2-3}
- & \textnormal{Intermediate Stiffener Spacing (mm)} & """ + _render_value(bridge.output_dict, KEY_SD_STIFF_INT_SPACING) + r""" \\[6pt]
-\cline{2-3}
- & \textnormal{End Panel Stiffener Thickness (mm)} & """ + _render_value(bridge.output_dict, KEY_SD_STIFF_END_THICK) + r""" \\[6pt]
-\cline{2-3}
- & \textnormal{No. of End Panel Stiffeners} & """ + _render_value(bridge.output_dict, KEY_SD_STIFF_END_COUNT) + r""" \\[6pt]
-\cline{2-3}
- & \textnormal{Longitudinal Stiffeners} & """ + _render_value(bridge.output_dict, KEY_SD_STIFF_LONG) + r""" \\[6pt]
-\hline"""
-        )
+        for param, value in (
+            (r"\textnormal{Shear Buckling Design Method}", _render_value(bridge.output_dict, KEY_SD_STIFF_METHOD)),
+            (r"\textnormal{Intermediate Stiffener Thickness (mm)}", _render_value(bridge.output_dict, KEY_SD_STIFF_INT_THICK)),
+            (r"\textnormal{Intermediate Stiffener Spacing (mm)}", _render_value(bridge.output_dict, KEY_SD_STIFF_INT_SPACING)),
+            (r"\textnormal{End Panel Stiffener Thickness (mm)}", _render_value(bridge.output_dict, KEY_SD_STIFF_END_THICK)),
+            (r"\textnormal{No. of End Panel Stiffeners}", _render_value(bridge.output_dict, KEY_SD_STIFF_END_COUNT)),
+            (r"\textnormal{Longitudinal Stiffeners}", _render_value(bridge.output_dict, KEY_SD_STIFF_LONG)),
+        ):
+            t57_rows.append(lbl + " & " + param + " & " + value + r" \\[6pt]" + "\n" + r"\hline")
     t57_content = "\n".join(t57_rows)
 
     # Generate table - intermediate stiffener checks (IS 800 CL. 8.7.1.2)
@@ -1320,7 +1316,7 @@ This section presents all structural design checks performed by OsdagBridge. For
 \end{longtable}
 \noindent\textit{Note: IRC 22 Cl. 604.3.2}
 
-\vspace{1em}
+\clearpage
 \begin{longtable}{|C{2.5cm}|L{3.5cm}|C{3.5cm}|>{\centering\arraybackslash}p{3.5cm}|C{2.5cm}|}
 \caption{\textbf{Serviceability -- Maximum Stress Limitation}} \label{subsec:sls-stress} \\
 \hline
@@ -1766,7 +1762,7 @@ Cross bracing between adjacent plate girders provides lateral stability during c
 \begingroup
 \vspace{0.4em}
 \noindent
-\setlength{\tabcolsep}{4pt}
+\setlength{\tabcolsep}{""" + styles.latex_pt(styles.TABCOLSEP_NARROW_4) + r"""}
 \setlength\LTleft{0pt}
 \setlength\LTright{\fill}
 
@@ -1857,7 +1853,7 @@ End diaphragms at the supports transfer transverse loads to the bearings, restra
 \begingroup
 \vspace{0.4em}
 \noindent
-\setlength{\tabcolsep}{4pt}
+\setlength{\tabcolsep}{""" + styles.latex_pt(styles.TABCOLSEP_NARROW_4) + r"""}
 \setlength{\LTleft}{0pt}
 \setlength{\LTright}{\fill}
 
@@ -1943,7 +1939,7 @@ End diaphragms at the supports transfer transverse loads to the bearings, restra
 \label{sec:overall-summary}
 % ===========================
 """ + ur_chart_tex + r"""
-\vspace{1em}
+\clearpage
 \begin{longtable}{|C{3.4cm}|L{4.5cm}|C{2.3cm}|C{2.3cm}|>{\centering\arraybackslash}p{1.6cm}|}
 \caption{\textbf{Overall Design Check Summary --- All Members}} \label{subsec:overall-design-summary} \\
 \hline

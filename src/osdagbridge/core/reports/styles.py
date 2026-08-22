@@ -72,6 +72,11 @@ CHART_FONT_AXIS = 10
 CHART_FONT_LABEL = 8
 
 
+def latex_pt(value) -> str:
+    """Return a LaTeX point length from a numeric style token."""
+    return f"{value:g}pt"
+
+
 def preamble_style_block() -> str:
     """Return LaTeX string containing global spacing, rules, and geometry definitions."""
     return f"""% Table layout and spacing: consistent padding, row height, and longtable pre/post skips

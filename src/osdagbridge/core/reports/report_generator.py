@@ -169,7 +169,7 @@ def preamble(project_name, job_number, report_date, report_version='Rev 0'):
 \documentclass[12pt,a4paper]{report}
 
 % Packages
-\usepackage[a4paper, top=1in, bottom=1.3in, left=1in, right=1in]{geometry}
+\usepackage[a4paper, top=""" + styles.PAGE_MARGIN + r""", bottom=""" + styles.BOTTOM_MARGIN + r""", left=""" + styles.PAGE_MARGIN + r""", right=""" + styles.PAGE_MARGIN + r"""]{geometry}
 \usepackage{graphicx}
 \usepackage{amsmath}
 \usepackage{amssymb}
@@ -207,7 +207,7 @@ def preamble(project_name, job_number, report_date, report_version='Rev 0'):
 \numberwithin{figure}{chapter}
 """ + styles.preamble_style_block() + r"""
 
-\definecolor{osdagGreen}{HTML}{91B014}
+\definecolor{""" + styles.OSDAG_GREEN_LATEX + r"""}{HTML}{""" + styles.OSDAG_GREEN_HEX.lstrip('#') + r"""}
 
 \fancypagestyle{main}{
   \fancyhf{}
@@ -928,56 +928,76 @@ def generate_report(payload, request):
                         pass
                     return None
 
-                # Girder checks
-                flx_ur = _parse_ur(bridge.output_dict.get(KEY_UTIL_FLEXURE))
-                if flx_ur is not None:
-                    ur_dict["Girder — Flexure"] = flx_ur
+                # Plate Girder checks: collect all checks to identify governing max DCR (including fatigue)
+                pg_dcr_list = []
+                for k in (KEY_UTIL_FLEXURE, KEY_UTIL_SHEAR, KEY_UTIL_LTB, KEY_UTIL_INTERACTION):
+                    v = _parse_ur(bridge.output_dict.get(k))
+                    if v is not None:
+                        pg_dcr_list.append(v)
 
-                shr_ur = _parse_ur(bridge.output_dict.get(KEY_UTIL_SHEAR))
-                if shr_ur is not None:
-                    ur_dict["Girder — Shear"] = shr_ur
+                pg_data = (bridge.output_dict.get("design_results", {}) or {}).get("per_girder", {}) or {}
+                for g, gd in pg_data.items():
+                    if str(g).startswith("EB"):
+                        continue
+                    for chk in (gd.get("checks") or []):
+                        d = chk.get("dcr")
+                        if d is not None:
+                            try:
+                                pg_dcr_list.append(float(d))
+                            except (ValueError, TypeError):
+                                pass
+                    for lc, ld in (gd.get("per_lc") or {}).items():
+                        for chk in (ld.get("checks") or []):
+                            d = chk.get("dcr")
+                            if d is not None:
+                                try:
+                                    pg_dcr_list.append(float(d))
+                                except (ValueError, TypeError):
+                                    pass
 
-                ltb_ur = _parse_ur(bridge.output_dict.get(KEY_UTIL_LTB))
-                if ltb_ur is not None:
-                    ur_dict["Girder — LTB"] = ltb_ur
-
-                int_ur = _parse_ur(bridge.output_dict.get(KEY_UTIL_INTERACTION))
-                if int_ur is not None:
-                    ur_dict["Girder — Interaction"] = int_ur
+                if pg_dcr_list:
+                    ur_dict["Plate Girder (Governing)"] = max(pg_dcr_list)
 
                 # Deck checks
-                deck_rpt = bridge.output_dict.get("deck_report_values", {})
+                deck_dcr_list = []
+                deck_rpt = bridge.output_dict.get("deck_report_values", {}) or {}
                 try:
-                    ms = deck_rpt.get(KEY_DD_M_ULS_SAG)
-                    mu_b = deck_rpt.get(KEY_DD_MU_BOT)
+                    ms, mu_b = deck_rpt.get(KEY_DD_M_ULS_SAG), deck_rpt.get(KEY_DD_MU_BOT)
                     if ms and mu_b and float(mu_b) > 0:
-                        ur_dict["Deck — Sagging Flexure"] = float(ms) / float(mu_b)
+                        deck_dcr_list.append(float(ms) / float(mu_b))
                 except Exception:
                     pass
 
                 try:
-                    mh = deck_rpt.get(KEY_DD_M_ULS_HOG)
-                    mu_t = deck_rpt.get(KEY_DD_MU_TOP)
+                    mh, mu_t = deck_rpt.get(KEY_DD_M_ULS_HOG), deck_rpt.get(KEY_DD_MU_TOP)
                     if mh and mu_t and float(mu_t) > 0:
-                        ur_dict["Deck — Hogging Flexure"] = float(mh) / float(mu_t)
+                        deck_dcr_list.append(float(mh) / float(mu_t))
                 except Exception:
                     pass
 
                 try:
-                    p_ved = deck_rpt.get(KEY_DD_PUNCH_VED)
-                    p_vrd = deck_rpt.get(KEY_DD_VRD_C_MPA)
+                    mo, mu_o = deck_rpt.get(KEY_DD_M_ULS_OH), deck_rpt.get(KEY_DD_MU_OH)
+                    if mo and mu_o and float(mu_o) > 0:
+                        deck_dcr_list.append(float(mo) / float(mu_o))
+                except Exception:
+                    pass
+
+                try:
+                    p_ved, p_vrd = deck_rpt.get(KEY_DD_PUNCH_VED), deck_rpt.get(KEY_DD_VRD_C_MPA)
                     if p_ved and p_vrd and float(p_vrd) > 0:
-                        ur_dict["Deck — Punching Shear"] = float(p_ved) / float(p_vrd)
+                        deck_dcr_list.append(float(p_ved) / float(p_vrd))
                 except Exception:
                     pass
 
                 try:
-                    s_ved = deck_rpt.get(KEY_DD_SHEAR_VED)
-                    s_vrd = deck_rpt.get(KEY_DD_SHEAR_VRDC)
+                    s_ved, s_vrd = deck_rpt.get(KEY_DD_SHEAR_VED), deck_rpt.get(KEY_DD_SHEAR_VRDC)
                     if s_ved and s_vrd and float(s_vrd) > 0:
-                        ur_dict["Deck — Beam Shear"] = float(s_ved) / float(s_vrd)
+                        deck_dcr_list.append(float(s_ved) / float(s_vrd))
                 except Exception:
                     pass
+
+                if deck_dcr_list:
+                    ur_dict["Deck Slab (Governing)"] = max(deck_dcr_list)
 
                 # Cross bracing & End diaphragm
                 cb_eff = _max_member_efficiency(bridge.output_dict.get("crossbracing_design_results", {}))

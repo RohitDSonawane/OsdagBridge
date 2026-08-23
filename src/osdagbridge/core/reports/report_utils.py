@@ -165,3 +165,64 @@ def _max_member_efficiency(pair_designs):
     return best
 
 
+def get_deck_max_ur(deck_report_values, deck_design_results=None):
+    """
+    Computes governing Deck Slab UR from deck_report_values (sagging flexure,
+    hogging flexure, cantilever overhang, punching shear, and one-way shear)
+    to match Chapter 5 Table 5.29 exactly.
+    """
+    from osdagbridge.core.utils.common import (
+        KEY_DD_M_ULS_SAG, KEY_DD_MU_BOT,
+        KEY_DD_M_ULS_HOG, KEY_DD_MU_TOP,
+        KEY_DD_M_ULS_OH, KEY_DD_MU_OH,
+        KEY_DD_PUNCH_VED, KEY_DD_VRD_C_MPA,
+        KEY_DD_SHEAR_VED, KEY_DD_SHEAR_VRDC,
+    )
+    def _to_f(v):
+        if v in (None, "", "N.A.", "---"):
+            return None
+        try:
+            return float(v)
+        except (ValueError, TypeError):
+            return None
+
+    deck_urs = []
+    if isinstance(deck_report_values, dict):
+        _m_sag = _to_f(deck_report_values.get(KEY_DD_M_ULS_SAG))
+        _mu_bot = _to_f(deck_report_values.get(KEY_DD_MU_BOT))
+        if _m_sag is not None and _mu_bot and _mu_bot > 0:
+            deck_urs.append(_m_sag / _mu_bot)
+
+        _m_hog = _to_f(deck_report_values.get(KEY_DD_M_ULS_HOG))
+        _mu_top = _to_f(deck_report_values.get(KEY_DD_MU_TOP))
+        if _m_hog is not None and _mu_top and _mu_top > 0:
+            deck_urs.append(_m_hog / _mu_top)
+
+        _m_oh = _to_f(deck_report_values.get(KEY_DD_M_ULS_OH))
+        _mu_oh = _to_f(deck_report_values.get(KEY_DD_MU_OH))
+        if _m_oh is not None and _mu_oh and _mu_oh > 0:
+            deck_urs.append(_m_oh / _mu_oh)
+
+        _p_ved = _to_f(deck_report_values.get(KEY_DD_PUNCH_VED))
+        _vrd_c = _to_f(deck_report_values.get(KEY_DD_VRD_C_MPA))
+        if _p_ved is not None and _vrd_c and _vrd_c > 0:
+            deck_urs.append(_p_ved / _vrd_c)
+
+        _s_ved = _to_f(deck_report_values.get(KEY_DD_SHEAR_VED))
+        _vrdc = _to_f(deck_report_values.get(KEY_DD_SHEAR_VRDC))
+        if _s_ved is not None and _vrdc and _vrdc > 0:
+            deck_urs.append(_s_ved / _vrdc)
+
+    if deck_urs:
+        return max(deck_urs)
+
+    if isinstance(deck_design_results, dict):
+        primary_keys = ["ur_bot_uls", "ur_top_uls", "ur_oh_uls", "ur_bot_shear", "ur_bot_punch", "ur_oh_shear", "ur_oh_punch"]
+        vals = [_to_f(deck_design_results.get(k)) for k in primary_keys]
+        valid_vals = [v for v in vals if v is not None]
+        if valid_vals:
+            return max(valid_vals)
+
+    return None
+
+

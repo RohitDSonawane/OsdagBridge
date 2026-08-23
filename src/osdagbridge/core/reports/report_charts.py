@@ -63,22 +63,24 @@ def generate_ur_chart(ur_data: dict, output_dir: str, filename: str = "ur_summar
         ax.invert_yaxis()  # Highest/first check at top
 
         max_val = max(values) if values else 1.0
-        ax.set_xlim(0, max(1.15, max_val + 0.15))
+        ax.set_xlim(0, max(1.25, max_val + 0.35))
         ax.set_xlabel("Utilization Ratio (Demand / Capacity)", fontsize=styles.CHART_FONT_AXIS, fontweight="bold")
         ax.set_title("Overall Design Check — Utilization Ratio Summary", fontsize=styles.CHART_FONT_TITLE, fontweight="bold", pad=12)
 
         # Value annotations on bar ends
         for bar, val in zip(bars, values):
             width = bar.get_width()
+            status_text = "FAIL" if val > 1.0 else "PASS"
+            status_color = styles.CHART_COLOR_FAIL if val > 1.0 else styles.CHART_COLOR_PASS
             ax.text(
                 width + 0.02,
                 bar.get_y() + bar.get_height() / 2,
-                f"{val:.2f}",
+                f"{val:.2f} ({status_text})",
                 va="center",
                 ha="left",
                 fontsize=styles.CHART_FONT_LABEL,
                 fontweight="bold",
-                color="#333333"
+                color=status_color
             )
 
         ax.grid(axis="x", linestyle=":", alpha=0.6, zorder=0)

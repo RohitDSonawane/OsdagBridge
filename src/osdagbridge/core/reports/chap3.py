@@ -4,6 +4,7 @@
 # =============================================================================
 
 from osdagbridge.core.utils.common import (
+    KEY_CARRIAGEWAY_WIDTH,
     KEY_CB_LOAD,
     KEY_FOOTPATH,
     KEY_LL_CUSTOM_VEHICLES,
@@ -68,19 +69,34 @@ def ch3_loads(input_dict):
             span_m = None
 
     lanes = input_dict.get(KEY_WC_LD_LANE_TABLE_COUNT)
+    if not lanes:
+        cw = input_dict.get(KEY_CARRIAGEWAY_WIDTH)
+        if cw not in (None, ""):
+            try:
+                lanes = IRC6_2017.table_6(float(cw))
+            except Exception:
+                lanes = 2
+        else:
+            lanes = 2
+
     braking_force_val_str = "---"
     if lanes not in (None, ""):
         try:
             lanes_int = int(lanes)
-            braking_force_t = IRC6_2017.cl_211_2_braking_force(lanes_int)
-            braking_force_kN = braking_force_t * 9.81
+            braking_force_raw = IRC6_2017.cl_211_2_braking_force(lanes_int)
+            if braking_force_raw > 1000.0:
+                braking_force_kN = braking_force_raw / 1000.0
+            else:
+                braking_force_kN = braking_force_raw * 9.81
             braking_force_val_str = f"{braking_force_kN:.2f} kN"
         except Exception:
             braking_force_val_str = "N/A"
 
     # Per-vehicle records for Table 3.3(a)
     vehicle_rows = []
-    def _total_load_from_vehicle(vehicle_fn):
+    def _total_load_from_vehicle(vehicle_fn, direct_total_kN=None):
+        if direct_total_kN is not None:
+            return f"{float(direct_total_kN):.2f}"
         if not vehicle_fn:
             return "N/A"
         try:
@@ -96,7 +112,7 @@ def ch3_loads(input_dict):
             return "N/A"
         return "N/A"
 
-    def _add_vrow(name, if_clause_fn, has_braking=True, custom_if=None, custom_ecc=None, vehicle_fn=None):
+    def _add_vrow(name, if_clause_fn, has_braking=True, custom_if=None, custom_ecc=None, vehicle_fn=None, direct_total_kN=None):
         if custom_if is not None:
             if_str = custom_if
         elif if_clause_fn and span_m is not None:
@@ -117,7 +133,7 @@ def ch3_loads(input_dict):
             brk_val = "---"
             brk_ecc = "---"
 
-        total_load = _total_load_from_vehicle(vehicle_fn)
+        total_load = _total_load_from_vehicle(vehicle_fn, direct_total_kN)
         return f"{name} & {total_load} & {if_str} & {brk_cons} & {brk_val} & {brk_ecc}" + r" \\[6pt]" + "\n" + r"\hline"
 
     if input_dict.get(KEY_LL_IRC_CLASS_A):
@@ -127,11 +143,11 @@ def ch3_loads(input_dict):
     if input_dict.get(KEY_LL_IRC_70R_TRACKED):
         vehicle_rows.append(_add_vrow("Class 70R (Tracked)", IRC6_2017.cl_208_3_impact_factor, True, vehicle_fn=IRC6_2017.cl_204_1_Class70R_vehicle_track))
     if input_dict.get(KEY_LL_IRC_70R_BOGIE):
-        vehicle_rows.append(_add_vrow("Class 70R (Bogie)", IRC6_2017.cl_208_3_impact_factor, True))
+        vehicle_rows.append(_add_vrow("Class 70R (Bogie)", IRC6_2017.cl_208_3_impact_factor, True, direct_total_kN=392.40))
     if input_dict.get(KEY_LL_IRC_AA_WHEELED):
-        vehicle_rows.append(_add_vrow("Class AA (Wheeled)", IRC6_2017.cl_208_3_impact_factor, True))
+        vehicle_rows.append(_add_vrow("Class AA (Wheeled)", IRC6_2017.cl_208_3_impact_factor, True, direct_total_kN=392.40))
     if input_dict.get(KEY_LL_IRC_AA_TRACKED):
-        vehicle_rows.append(_add_vrow("Class AA (Tracked)", IRC6_2017.cl_208_3_impact_factor, True))
+        vehicle_rows.append(_add_vrow("Class AA (Tracked)", IRC6_2017.cl_208_3_impact_factor, True, direct_total_kN=686.70))
     if input_dict.get(KEY_LL_IRC_CLASS_SV):
         vehicle_rows.append(_add_vrow("Class SV", None, False, custom_if="---", vehicle_fn=IRC6_2017.cl_204_5_1_special_vehicle))
     if input_dict.get(KEY_LL_IRC_CLASS_FATIGUE):

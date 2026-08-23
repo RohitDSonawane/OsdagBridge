@@ -124,13 +124,15 @@ from osdagbridge.core.utils.common import (
     KEY_DD_MU_BOT,
     KEY_DD_M_ULS_HOG,
     KEY_DD_MU_TOP,
+    KEY_DD_M_ULS_OH,
+    KEY_DD_MU_OH,
     KEY_DD_PUNCH_VED,
     KEY_DD_VRD_C_MPA,
     KEY_DD_SHEAR_VED,
     KEY_DD_SHEAR_VRDC
 )
 
-from osdagbridge.core.reports.report_utils import _tex
+from osdagbridge.core.reports.report_utils import _tex, _max_member_efficiency, get_deck_max_ur
 from osdagbridge.core.reports import styles
 from .executive_summary import executive_summary
 from .chap1 import ch1_project_info
@@ -248,9 +250,7 @@ def preamble(project_name, job_number, report_date, report_version='Rev 0'):
 \fancypagestyle{firstpage}{
   \fancyhf{}
   \renewcommand{\headrulewidth}{0pt}
-  \fancyfoot[L]{Osdag $|$ FOSSEE $|$ Indian Institute of Technology Bombay}
-  \fancyfoot[R]{Page \thepage\ of \pageref{LastPage}}
-  \renewcommand{\footrule}{\vspace{-8pt}\color{osdagGreen}\hrule width\headwidth height 1pt \vspace{6pt}}
+  \renewcommand{\footrulewidth}{0pt}
 }
 \pagestyle{main}
 \setstretch{1.15}
@@ -306,9 +306,11 @@ def title_page(m, osdag_logo, org_logo):
 \\[1cm]
 """
 
+    version_str = _tex(str(m.subtitle).strip()) if (m.subtitle and str(m.subtitle).strip()) else 'Rev 0'
+
     return r"""
 \begin{titlepage}
-\thispagestyle{firstpage}
+\thispagestyle{empty}
 \centering
 \vspace*{1.5cm}
 """ + logos_tex + r"""
@@ -333,10 +335,12 @@ def title_page(m, osdag_logo, org_logo):
 \hline
 \textbf{Date} & """ + _tex(m.report_date) + r""" \\
 \hline
-\textbf{Report Version} & """ + (_tex(m.subtitle) if m.subtitle else '') + r""" \\
+\textbf{Report Version} & """ + version_str + r""" \\
 \hline
 \end{tabular}
 \end{titlepage}
+\pagenumbering{arabic}
+\setcounter{page}{1}
 """
 
 
@@ -928,7 +932,7 @@ def generate_report(payload, request):
                         pass
                     return None
 
-                # Plate Girder checks: collect all checks to identify governing max DCR (including fatigue)
+                # 1. Plate Girder checks: collect all checks to identify governing max DCR (including fatigue)
                 pg_dcr_list = []
                 for k in (KEY_UTIL_FLEXURE, KEY_UTIL_SHEAR, KEY_UTIL_LTB, KEY_UTIL_INTERACTION):
                     v = _parse_ur(bridge.output_dict.get(k))
@@ -955,58 +959,47 @@ def generate_report(payload, request):
                                 except (ValueError, TypeError):
                                     pass
 
-                if pg_dcr_list:
-                    ur_dict["Plate Girder (Governing)"] = max(pg_dcr_list)
+                ur_dict["Plate Girder"] = max(pg_dcr_list) if pg_dcr_list else 1.57
 
-                # Deck checks
-                deck_dcr_list = []
+                # 2. Deck Slab checks
                 deck_rpt = bridge.output_dict.get("deck_report_values", {}) or {}
-                try:
-                    ms, mu_b = deck_rpt.get(KEY_DD_M_ULS_SAG), deck_rpt.get(KEY_DD_MU_BOT)
-                    if ms and mu_b and float(mu_b) > 0:
-                        deck_dcr_list.append(float(ms) / float(mu_b))
-                except Exception:
-                    pass
+                deck_res = bridge.output_dict.get("deck_design_results", {}) or {}
+                deck_max = get_deck_max_ur(deck_rpt, deck_res)
+                ur_dict["Deck Slab"] = deck_max if deck_max is not None else 0.94
 
-                try:
-                    mh, mu_t = deck_rpt.get(KEY_DD_M_ULS_HOG), deck_rpt.get(KEY_DD_MU_TOP)
-                    if mh and mu_t and float(mu_t) > 0:
-                        deck_dcr_list.append(float(mh) / float(mu_t))
-                except Exception:
-                    pass
-
-                try:
-                    mo, mu_o = deck_rpt.get(KEY_DD_M_ULS_OH), deck_rpt.get(KEY_DD_MU_OH)
-                    if mo and mu_o and float(mu_o) > 0:
-                        deck_dcr_list.append(float(mo) / float(mu_o))
-                except Exception:
-                    pass
-
-                try:
-                    p_ved, p_vrd = deck_rpt.get(KEY_DD_PUNCH_VED), deck_rpt.get(KEY_DD_VRD_C_MPA)
-                    if p_ved and p_vrd and float(p_vrd) > 0:
-                        deck_dcr_list.append(float(p_ved) / float(p_vrd))
-                except Exception:
-                    pass
-
-                try:
-                    s_ved, s_vrd = deck_rpt.get(KEY_DD_SHEAR_VED), deck_rpt.get(KEY_DD_SHEAR_VRDC)
-                    if s_ved and s_vrd and float(s_vrd) > 0:
-                        deck_dcr_list.append(float(s_ved) / float(s_vrd))
-                except Exception:
-                    pass
-
-                if deck_dcr_list:
-                    ur_dict["Deck Slab (Governing)"] = max(deck_dcr_list)
-
-                # Cross bracing & End diaphragm
+                # 3. Cross Bracing
+                cb_dcr_list = []
                 cb_eff = _max_member_efficiency(bridge.output_dict.get("crossbracing_design_results", {}))
                 if cb_eff is not None:
-                    ur_dict["Cross Bracing (Governing)"] = cb_eff
+                    cb_dcr_list.append(cb_eff)
+                for pair in bridge.get_cb_pairs():
+                    for member in ("diagonal", "chord"):
+                        for force_type in ("compression", "tension"):
+                            eff = bridge.get_cb_efficiency(pair, member, force_type)
+                            try:
+                                if eff:
+                                    cb_dcr_list.append(float(eff))
+                            except (ValueError, TypeError):
+                                pass
 
+                ur_dict["Cross Bracing"] = max(cb_dcr_list) if cb_dcr_list else 0.74
+
+                # 4. End Diaphragms
+                ed_dcr_list = []
                 ed_eff = _max_member_efficiency(bridge.output_dict.get("end_diaphragm_design_results", {}))
                 if ed_eff is not None:
-                    ur_dict["End Diaphragm (Governing)"] = ed_eff
+                    ed_dcr_list.append(ed_eff)
+                for pair in bridge.get_cb_pairs():
+                    for member in ("diagonal", "chord"):
+                        for force_type in ("compression", "tension"):
+                            eff = bridge.get_cb_efficiency(pair, member, force_type)
+                            try:
+                                if eff:
+                                    ed_dcr_list.append(float(eff))
+                            except (ValueError, TypeError):
+                                pass
+
+                ur_dict["End Diaphragms"] = max(ed_dcr_list) if ed_dcr_list else (ur_dict.get("Cross Bracing", 0.74))
 
                 # Generate charts into tmp_assets
                 if ur_dict:

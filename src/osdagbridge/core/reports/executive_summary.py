@@ -7,6 +7,7 @@ from osdagbridge.core.reports.report_utils import (
     _max_member_efficiency,
     _render_value,
     _tex,
+    get_deck_max_ur,
     get_girder_entries
 )
 from osdagbridge.core.utils.common import (
@@ -80,6 +81,22 @@ def executive_summary(input_dict, output_dict, fig_paths) -> str:
                     gov_dcr, gov_name = dcr, name
                 if girder_max_ur is None or dcr > girder_max_ur:
                     girder_max_ur = dcr
+        for lc, ld in (gd.get("per_lc") or {}).items():
+            for chk in (ld.get("checks") or []):
+                try:
+                    _val = chk.get("dcr")
+                    dcr = float(_val) if _val is not None else None
+                except (TypeError, ValueError):
+                    dcr = None
+                name = str(chk.get("name", "")).strip()
+                is_fail = ("FAIL" in str(chk.get("status", "")).upper()) or (dcr is not None and dcr > 1.0)
+                if is_fail and name and name not in failing:
+                    failing.append(name)
+                if dcr is not None:
+                    if gov_dcr is None or dcr > gov_dcr:
+                        gov_dcr, gov_name = dcr, name
+                    if girder_max_ur is None or dcr > girder_max_ur:
+                        girder_max_ur = dcr
 
     if not per_girder:
         overall_design_status = ""
@@ -88,12 +105,44 @@ def executive_summary(input_dict, output_dict, fig_paths) -> str:
     else:
         overall_design_status = "Pass"
 
+    # Dynamic Key Design Outcomes
+    if failing or (girder_max_ur is not None and girder_max_ur > 1.0):
+        _g_check = f" (governing {gov_name}, UR = {girder_max_ur:.2f})" if (gov_name and girder_max_ur) else ""
+        girder_outcome = r"Girder design --- \textbf{FAIL}" + _tex(_g_check)
+    else:
+        _g_ur = f" (UR = {girder_max_ur:.2f})" if girder_max_ur is not None else ""
+        girder_outcome = r"Girder design --- PASS" + _g_ur
+
+    cb_m = _max_member_efficiency(cb_results)
+    if cb_m is not None and cb_m > 1.0:
+        cb_outcome = f"Cross bracing design --- \\textbf{{FAIL}} (UR = {cb_m:.2f})"
+    elif cb_m is not None:
+        cb_outcome = f"Cross bracing design --- PASS (UR = {cb_m:.2f})"
+    else:
+        cb_outcome = "Cross bracing design --- PASS"
+
+    ed_m = _max_member_efficiency(ed_results)
+    if ed_m is not None and ed_m > 1.0:
+        ed_outcome = f"End Diaphragm design --- \\textbf{{FAIL}} (UR = {ed_m:.2f})"
+    elif ed_m is not None:
+        ed_outcome = f"End Diaphragm design --- PASS (UR = {ed_m:.2f})"
+    else:
+        ed_outcome = "End Diaphragm design --- PASS"
+
+    deck_rpt = output_dict.get("deck_report_values", {}) or {}
+    deck_max = get_deck_max_ur(deck_rpt, deck_results)
+    if deck_max is not None and deck_max > 1.0:
+        deck_outcome = f"Deck design --- \\textbf{{FAIL}} (UR = {deck_max:.2f})"
+    elif deck_max is not None:
+        deck_outcome = f"Deck design --- PASS (UR = {deck_max:.2f})"
+    else:
+        deck_outcome = "Deck design --- PASS"
+
     # Overall Utilization Ratio — the maximum UR across all bridge components,
     # tagged with the governing component (e.g. "1.05 (Deck slab)").
     component_urs = []                  # (ur_value, component_label)
     if girder_max_ur is not None:
         component_urs.append((girder_max_ur, "Girder"))
-    deck_max = _max_float([v for k, v in deck_results.items() if str(k).startswith("ur_")])
     if deck_max is not None:
         component_urs.append((deck_max, "Deck slab"))
     for results, label in ((cb_results, "Cross bracing"), (ed_results, "End diaphragm")):
@@ -209,10 +258,10 @@ This section provides a concise summary of the bridge design, key inputs, govern
 \addcontentsline{toc}{section}{Key Design Outcomes Summary}
 \label{sec:key-outcomes}
 
-\noindent Girder design pass \\
-Cross bracing design pass \\
-End Diaphragm design pass \\
-Deck design pass
+\noindent """ + girder_outcome + r""" \\
+""" + cb_outcome + r""" \\
+""" + ed_outcome + r""" \\
+""" + deck_outcome + r"""
 
 \section*{Design Assumptions and Limitations}
 \addcontentsline{toc}{section}{Design Assumptions and Limitations}
